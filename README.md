@@ -1,0 +1,3 @@
+# MultimodalDoc
+
+This project is a high-performance Document Intake and Extraction Pipeline designed to transform unstructured PDFs into structured, verifiable data. Built with a FastAPI backend and a Next.js frontend, the system leverages Supabase for storage and metadata management, utilizing a multi-stage processing engine that handles native text extraction, OCR for scanned documents, and specialized table parsing. The platform’s standout feature is its Traceable Evidence Engine, which maps extracted JSON fields and text blocks back to their original coordinates (bounding boxes) on the document, allowing users to verify data accuracy through an interactive, highlighted PDF viewer.

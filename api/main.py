@@ -1,4 +1,5 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
+from ingestion import ingest_document
 from supabase_client import supabase
 import uuid
 
@@ -39,3 +40,9 @@ async def upload_document(file: UploadFile = File(...)):
 def get_document(document_id: str):
     response = supabase.table("documents").select("*").eq("id", document_id).execute()
     return response.data
+
+
+@app.post("/documents/{document_id}/parse")
+def parse_document(document_id: str):
+    ingest_document(document_id)
+    return {"message": "Parsing completed"}

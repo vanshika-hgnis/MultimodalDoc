@@ -1,3 +1,5 @@
 .env
 Plan.txt
 .vscode
+__pycache__/
+env/

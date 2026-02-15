@@ -1,5 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from ingestion import ingest_document
+from tasks import ingest_document_task
 from supabase_client import supabase
 import uuid
 
@@ -44,5 +45,13 @@ def get_document(document_id: str):
 
 @app.post("/documents/{document_id}/parse")
 def parse_document(document_id: str):
-    ingest_document(document_id)
-    return {"message": "Parsing completed"}
+
+    # mark status processing
+    supabase.table("documents").update({"status": "processing"}).eq(
+        "id", document_id
+    ).execute()
+
+    # trigger async job
+    ingest_document_task.delay(document_id)
+
+    return {"message": "Parsing started in background"}

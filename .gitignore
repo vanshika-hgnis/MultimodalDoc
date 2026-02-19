@@ -3,3 +3,4 @@ Plan.txt
 .vscode
 __pycache__/
 env/
+api/models/easyocr/

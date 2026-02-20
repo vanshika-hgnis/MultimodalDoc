@@ -87,6 +87,7 @@ def ingest_document(document_id: str):
                 ).execute()
 
     # update document status at end
+    print("TASK RECEIVED:", document_id)
     supabase.table("documents").update({"status": "parsed"}).eq(
         "id", document_id
     ).execute()

@@ -1,93 +1,139 @@
 import fitz
+import pdfplumber
+import tempfile
 from supabase_client import supabase
-import easyocr
-from io import BytesIO
-
-# create a single reader (expensive init)
-ocr_reader = easyocr.Reader(["en"], gpu=False)
+from ocr_service import get_ocr_reader
 
 
 def ingest_document(document_id: str):
 
+    # 1️⃣ Get document metadata
     doc_response = (
-        supabase.table("documents").select("*").eq("id", document_id).execute()
+        supabase.table("documents")
+        .select("*")
+        .eq("id", document_id)
+        .execute()
     )
+
     if not doc_response.data:
         raise Exception("Document not found")
 
     storage_path = doc_response.data[0]["storage_path"]
+
     response = supabase.storage.from_("documents").download(storage_path)
 
     if not response:
         raise Exception("Failed to download from storage")
 
-    # write local temp file
-    import tempfile
-
+    # 2️⃣ Write temp file
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
         tmp.write(response)
         tmp_path = tmp.name
 
+    # 3️⃣ Open PDFs
     pdf = fitz.open(tmp_path)
+    plumber_pdf = pdfplumber.open(tmp_path)
 
+    # 4️⃣ Loop through pages
     for page_number in range(len(pdf)):
+
         page = pdf[page_number]
+        plumber_page = plumber_pdf.pages[page_number]
+
         blocks = page.get_text("blocks")
 
-        # check if page has text
-        page_text_content = " ".join([b[4] for b in blocks if b[4].strip()])
+        page_text_content = " ".join(
+            [b[4] for b in blocks if b[4] and b[4].strip()]
+        )
+
+        # -----------------------
+        # TEXT EXTRACTION
+        # -----------------------
 
         if page_text_content.strip():
-            # use regular PDF text
             for block in blocks:
                 x0, y0, x1, y1 = block[:4]
                 text = block[4]
-                if text.strip():
-                    supabase.table("text_blocks").insert(
-                        {
-                            "document_id": document_id,
-                            "page_number": page_number + 1,
-                            "text": text,
-                            "bbox": {"x0": x0, "y0": y0, "x1": x1, "y1": y1},
-                            "source_type": "pdf_text",
-                        }
-                    ).execute()
+
+                if text and text.strip():
+                    supabase.table("text_blocks").insert({
+                        "document_id": document_id,
+                        "page_number": page_number + 1,
+                        "text": text,
+                        "bbox": {
+                            "x0": x0,
+                            "y0": y0,
+                            "x1": x1,
+                            "y1": y1
+                        },
+                        "source_type": "pdf_text"
+                    }).execute()
+
         else:
-            # OCR fallback for scanned page
-            # render page to image
+            # -----------------------
+            # OCR FALLBACK
+            # -----------------------
+
+            reader = get_ocr_reader()
+
             pix = page.get_pixmap(dpi=300)
             image_bytes = pix.tobytes("png")
 
-            # OCR using easyocr
-            results = ocr_reader.readtext(image_bytes)
+            results = reader.readtext(image_bytes)
 
-            # combine OCR result words into line text
             for bbox, text, prob in results:
                 if not text.strip():
                     continue
 
-                # bbox is list of points [[x1,y1],[x2,y2],...]
                 xs = [p[0] for p in bbox]
                 ys = [p[1] for p in bbox]
-                bbox_json = {
-                    "x0": min(xs),
-                    "y0": min(ys),
-                    "x1": max(xs),
-                    "y1": max(ys),
-                }
 
-                supabase.table("text_blocks").insert(
-                    {
-                        "document_id": document_id,
-                        "page_number": page_number + 1,
-                        "text": text,
-                        "bbox": bbox_json,
-                        "source_type": "ocr_text",
-                    }
-                ).execute()
+                supabase.table("text_blocks").insert({
+                    "document_id": document_id,
+                    "page_number": page_number + 1,
+                    "text": text,
+                    "bbox": {
+                        "x0": min(xs),
+                        "y0": min(ys),
+                        "x1": max(xs),
+                        "y1": max(ys)
+                    },
+                    "source_type": "ocr_text"
+                }).execute()
 
-    # update document status at end
-    print("TASK RECEIVED:", document_id)
-    supabase.table("documents").update({"status": "parsed"}).eq(
-        "id", document_id
-    ).execute()
+        # -----------------------
+        # TABLE EXTRACTION
+        # -----------------------
+
+        tables = plumber_page.extract_tables()
+
+        for table in tables:
+            if not table:
+                continue
+
+            markdown = ""
+            for row in table:
+                row = [cell if cell else "" for cell in row]
+                markdown += "| " + " | ".join(row) + " |\n"
+
+            bbox_json = {
+                "x0": 0,
+                "y0": 0,
+                "x1": page.rect.width,
+                "y1": page.rect.height
+            }
+
+            supabase.table("table_blocks").insert({
+                "document_id": document_id,
+                "page_number": page_number + 1,
+                "table_markdown": markdown,
+                "table_json": table,
+                "bbox": bbox_json
+            }).execute()
+
+    # 5️⃣ Update status
+    supabase.table("documents").update({
+        "status": "parsed"
+    }).eq("id", document_id).execute()
+
+    print("Parsing completed:", document_id)

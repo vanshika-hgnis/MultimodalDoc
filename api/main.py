@@ -1,6 +1,8 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from ingestion import ingest_document
-from tasks import ingest_document_task
+from rag_service import retrieve_evidence
+from pydantic import BaseModel
+from tasks import ingest_document_task,embed_document_task
 from supabase_client import supabase
 import uuid
 
@@ -62,3 +64,19 @@ def parse_document(document_id: str):
 def embed_document(document_id: str):
     embed_document_task.delay(document_id)
     return {"message": "Embedding started"}
+
+
+class RetrieveRequest(BaseModel):
+    document_id: str
+    query: str
+    k: int = 8
+
+
+@app.post("/rag/retrieve")
+def rag_retrieve(request: RetrieveRequest):
+    results = retrieve_evidence(
+        request.document_id,
+        request.query,
+        request.k
+    )
+    return results

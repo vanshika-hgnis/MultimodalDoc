@@ -259,3 +259,6 @@ GET /documents/{document_id}
 ## License
 
 MIT
+
+python -m uvicorn main:app --reload
+celery -A celery_app.celery worker --loglevel=info

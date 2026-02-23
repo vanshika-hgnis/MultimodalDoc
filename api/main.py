@@ -55,3 +55,10 @@ def parse_document(document_id: str):
     ingest_document_task.delay(document_id)
 
     return {"message": "Parsing started in background"}
+
+
+
+@app.post("/documents/{document_id}/embed")
+def embed_document(document_id: str):
+    embed_document_task.delay(document_id)
+    return {"message": "Embedding started"}

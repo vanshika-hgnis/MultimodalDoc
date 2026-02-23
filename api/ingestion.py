@@ -3,6 +3,54 @@ import pdfplumber
 import tempfile
 from supabase_client import supabase
 from ocr_service import get_ocr_reader
+import re
+
+
+def table_to_markdown(table):
+    rows = []
+    for row in table:
+        rows.append([("" if c is None else str(c)).strip() for c in row])
+
+    if not rows:
+        return ""
+
+    header = rows[0]
+    body = rows[1:] if len(rows) > 1 else []
+
+    md = "| " + " | ".join(header) + " |\n"
+    md += "| " + " | ".join(["---"] * len(header)) + " |\n"
+
+    for r in body:
+        r = (r + [""] * len(header))[:len(header)]
+        md += "| " + " | ".join(r) + " |\n"
+
+    return md
+
+
+def is_good_block(text: str) -> bool:
+    t = text.strip()
+
+    if len(t) < 30:
+        return False
+
+    digits = sum(ch.isdigit() for ch in t)
+    if digits / max(len(t), 1) > 0.45:
+        return False
+
+    alpha = sum(ch.isalpha() for ch in t)
+    if alpha < 20:
+        return False
+
+    bad_patterns = [
+        r"notes located on\s+page",
+        r"self-contained year-end statement",
+    ]
+
+    for p in bad_patterns:
+        if re.search(p, t, re.IGNORECASE):
+            return False
+
+    return True
 
 
 def ingest_document(document_id: str):
@@ -55,7 +103,7 @@ def ingest_document(document_id: str):
                 x0, y0, x1, y1 = block[:4]
                 text = block[4]
 
-                if text and text.strip():
+                if text and is_good_block(text):
                     supabase.table("text_blocks").insert({
                         "document_id": document_id,
                         "page_number": page_number + 1,
@@ -114,7 +162,7 @@ def ingest_document(document_id: str):
             markdown = ""
             for row in table:
                 row = [cell if cell else "" for cell in row]
-                markdown += "| " + " | ".join(row) + " |\n"
+                markdown = table_to_markdown(table)
 
             bbox_json = {
                 "x0": 0,

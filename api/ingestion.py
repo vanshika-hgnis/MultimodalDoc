@@ -27,6 +27,39 @@ def table_to_markdown(table):
     return md
 
 
+
+
+def clean_text(text: str) -> str:
+    if not text:
+        return ""
+
+    # Remove null bytes
+    text = text.replace("\x00", "")
+
+    # Remove other invisible control characters except newline and tab
+    text = re.sub(r"[\x01-\x08\x0B-\x1F\x7F]", "", text)
+
+    # Normalize whitespace
+    text = re.sub(r"\s+", " ", text)
+
+    return text.strip()
+
+def clean_table_json(table):
+    cleaned = []
+
+    for row in table:
+        cleaned_row = []
+        for cell in row:
+            if cell is None:
+                cleaned_row.append("")
+            else:
+                cleaned_row.append(clean_text(str(cell)))
+        cleaned.append(cleaned_row)
+
+    return cleaned
+
+
+
 def is_good_block(text: str) -> bool:
     t = text.strip()
 
@@ -101,7 +134,8 @@ def ingest_document(document_id: str):
         if page_text_content.strip():
             for block in blocks:
                 x0, y0, x1, y1 = block[:4]
-                text = block[4]
+                # text = block[4]
+                text = clean_text(block[4])
 
                 if text and is_good_block(text):
                     supabase.table("text_blocks").insert({
@@ -130,6 +164,7 @@ def ingest_document(document_id: str):
             results = reader.readtext(image_bytes)
 
             for bbox, text, prob in results:
+                text = clean_text(text)
                 if not text.strip():
                     continue
 
@@ -158,12 +193,8 @@ def ingest_document(document_id: str):
         for table in tables:
             if not table:
                 continue
-
-            markdown = ""
-            for row in table:
-                row = [cell if cell else "" for cell in row]
-                markdown = table_to_markdown(table)
-
+            cleaned_table = clean_table_json(table)
+            markdown = clean_text(table_to_markdown(cleaned_table))
             bbox_json = {
                 "x0": 0,
                 "y0": 0,
@@ -175,7 +206,7 @@ def ingest_document(document_id: str):
                 "document_id": document_id,
                 "page_number": page_number + 1,
                 "table_markdown": markdown,
-                "table_json": table,
+                "table_json": cleaned_table,
                 "bbox": bbox_json
             }).execute()
 

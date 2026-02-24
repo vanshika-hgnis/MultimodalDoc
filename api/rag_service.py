@@ -60,15 +60,6 @@ def retrieve_evidence(document_id: str, query: str, k: int = 8):
             "score": r["similarity"]
         })
 
-    # for r in table_results:
-    #     combined.append({
-    #         "block_type": "table",
-    #         "block_id": r["id"],
-    #         "page_number": r["page_number"],
-    #         "content": r["table_markdown"],
-    #         "bbox": r["bbox"],
-    #         "score": r["similarity"]
-    #     })
 
     for r in keyword_results:
         combined.append({

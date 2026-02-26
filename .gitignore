@@ -4,3 +4,5 @@ Plan.txt
 __pycache__/
 env/
 api/models/easyocr/
+cleanenv/
+cleanenv

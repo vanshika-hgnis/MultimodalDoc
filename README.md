@@ -192,7 +192,8 @@ Terminal 2 — Celery Worker
 
 ```bash
 source env/bin/activate
-celery -A celery_app.celery worker --loglevel=info
+cd api
+celery -A celery_app:celery worker --loglevel=info
 ```
 
 ---
@@ -260,5 +261,30 @@ GET /documents/{document_id}
 
 MIT
 
+
+## guide to start locally during dev 
 python -m uvicorn main:app --reload
-celery -A celery_app.celery worker --loglevel=info
+cd api
+celery -A celery_app:celery worker --loglevel=info
+sudo service redis-server start
+ollama serve 
+
+
+✅ Next: Make Sure Redis Is Running
+
+In WSL:
+
+sudo service redis-server start
+
+or if not installed:
+
+sudo apt install redis-server
+sudo service redis-server start
+
+Test:
+
+redis-cli ping
+
+You should see:
+
+PONG

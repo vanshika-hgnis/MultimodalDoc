@@ -7,20 +7,16 @@ def retrieve_evidence(document_id: str, query: str, k: int = 8):
     query_embedding = generate_embedding(query)
 
     keyword_results = (
-    supabase.rpc(
-        "match_text_blocks_keyword",
-        {
-            "match_document_id": document_id,
-            "query_text": query,
-            "match_count": k
-        }
+        supabase.rpc(
+            "match_text_blocks_keyword",
+            {
+                "match_document_id": document_id,
+                "query_text": query,
+                "match_count": k
+            }
+        ).execute().data
     )
-    .execute()
-    .data
-)
 
-
-    # Search text blocks
     text_results = (
         supabase.rpc(
             "match_text_blocks",
@@ -29,12 +25,9 @@ def retrieve_evidence(document_id: str, query: str, k: int = 8):
                 "match_document_id": document_id,
                 "match_count": k
             }
-        )
-        .execute()
-        .data
+        ).execute().data
     )
 
-    # Search table blocks
     table_results = (
         supabase.rpc(
             "match_table_blocks",
@@ -43,13 +36,12 @@ def retrieve_evidence(document_id: str, query: str, k: int = 8):
                 "match_document_id": document_id,
                 "match_count": k
             }
-        )
-        .execute()
-        .data
+        ).execute().data
     )
 
     combined = []
 
+    # Vector text blocks
     for r in text_results:
         combined.append({
             "block_type": "text",
@@ -57,24 +49,37 @@ def retrieve_evidence(document_id: str, query: str, k: int = 8):
             "page_number": r["page_number"],
             "content": r["text"],
             "bbox": r["bbox"],
-            "score": r["similarity"]
+            "score": float(r["similarity"])
         })
 
-
-    for r in keyword_results:
+    # Vector table blocks
+    for r in table_results:
         combined.append({
-        "block_type": "text",
-        "block_id": r["id"],
-        "page_number": r["page_number"],
-        "content": r["text"],
-        "bbox": r["bbox"],
-        "score": 0  # keyword boost
+            "block_type": "table",
+            "block_id": r["id"],
+            "page_number": r["page_number"],
+            "content": r["table_markdown"],
+            "bbox": r["bbox"],
+            "score": float(r["similarity"])
         })
 
+    # Keyword boost (add instead of override)
+    for r in keyword_results:
+        for item in combined:
+            if item["block_id"] == r["id"]:
+                item["score"] += 0.15  # boost existing vector result
+                break
+        else:
+            # if not already present, add with small base score
+            combined.append({
+                "block_type": "text",
+                "block_id": r["id"],
+                "page_number": r["page_number"],
+                "content": r["text"],
+                "bbox": r["bbox"],
+                "score": 0.15
+            })
 
-    # Sort by similarity
-    combined.sort(key=lambda x: x["score"])
+    combined.sort(key=lambda x: x["score"], reverse=True)
 
     return combined[:k]
-
-

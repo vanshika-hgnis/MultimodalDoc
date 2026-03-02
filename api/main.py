@@ -1,6 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from ingestion import ingest_document
-from rag_service import retrieve_evidence
+from rag_service import retrieve_evidence,generate_answer
 from pydantic import BaseModel
 from tasks import ingest_document_task,embed_document_task
 from supabase_client import supabase

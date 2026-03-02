@@ -1,6 +1,14 @@
+import os
+from ollama import Client
 from embedding_service import generate_embedding
 from supabase_client import supabase
 
+client = Client(
+    host="https://ollama.com",
+    headers={
+        "Authorization": "Bearer " + os.getenv("OLLAMA_API_KEY")
+    }
+)
 
 def retrieve_evidence(document_id: str, query: str, k: int = 8):
 
@@ -41,7 +49,6 @@ def retrieve_evidence(document_id: str, query: str, k: int = 8):
 
     combined = []
 
-    # Vector text blocks
     for r in text_results:
         combined.append({
             "block_type": "text",
@@ -52,7 +59,6 @@ def retrieve_evidence(document_id: str, query: str, k: int = 8):
             "score": float(r["similarity"])
         })
 
-    # Vector table blocks
     for r in table_results:
         combined.append({
             "block_type": "table",
@@ -63,14 +69,12 @@ def retrieve_evidence(document_id: str, query: str, k: int = 8):
             "score": float(r["similarity"])
         })
 
-    # Keyword boost (add instead of override)
     for r in keyword_results:
         for item in combined:
             if item["block_id"] == r["id"]:
-                item["score"] += 0.15  # boost existing vector result
+                item["score"] += float(r.get("rank", 0)) * 0.6
                 break
         else:
-            # if not already present, add with small base score
             combined.append({
                 "block_type": "text",
                 "block_id": r["id"],
@@ -80,6 +84,44 @@ def retrieve_evidence(document_id: str, query: str, k: int = 8):
                 "score": 0.15
             })
 
+    unique = {}
+    for item in combined:
+        key = (item["page_number"], item["content"].strip())
+        if key not in unique:
+            unique[key] = item
+
+    combined = list(unique.values())
     combined.sort(key=lambda x: x["score"], reverse=True)
 
     return combined[:k]
+
+
+def generate_answer(document_id, query, k=8):
+
+    evidence = retrieve_evidence(document_id, query, k)
+
+    if not evidence:
+        return {
+            "answer": "No relevant context found in document.",
+            "sources": []
+        }
+
+    context = "\n\n".join([
+        f"[Page {e['page_number']} | {e['block_type']}]\n{e['content']}"
+        for e in evidence
+    ])
+
+    messages = [
+        {"role": "system", "content": "Answer strictly from provided context."},
+        {"role": "user", "content": f"Context:\n{context}\n\nQuestion:\n{query}"}
+    ]
+
+    response = client.chat(
+        model="gpt-oss:20b",
+        messages=messages
+    )
+
+    return {
+        "answer": response["message"]["content"],
+        "sources": evidence
+    }

@@ -80,3 +80,12 @@ def rag_retrieve(request: RetrieveRequest):
         request.k
     )
     return results
+
+@app.post("/rag/answer")
+def rag_answer(request: RetrieveRequest):
+    return generate_answer(
+        request.document_id,
+        request.query,
+        request.k
+    )
+

@@ -105,14 +105,13 @@ def generate_answer(document_id, query, k=8):
             "answer": "No relevant context found in document.",
             "sources": []
         }
-
+        
     context = "\n\n".join([
-        f"[Page {e['page_number']} | {e['block_type']}]\n{e['content']}"
-        for e in evidence
-    ])
+    f"[{i+1}] Page {e['page_number']} | {e['block_type']}\n{e['content']}"
+    for i, e in enumerate(evidence)])
 
     messages = [
-        {"role": "system", "content": "Answer strictly from provided context."},
+    {"role": "system", "content": "Answer ONLY from the context. After each sentence, add citations like [1] using the provided source numbers. If unknown, say you don't know."},
         {"role": "user", "content": f"Context:\n{context}\n\nQuestion:\n{query}"}
     ]
 

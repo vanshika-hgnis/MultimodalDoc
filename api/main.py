@@ -1,5 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from ingestion import ingest_document
+from fastapi.middleware.cors import CORSMiddleware
 from rag_service import retrieve_evidence,generate_answer
 from pydantic import BaseModel
 from tasks import ingest_document_task,embed_document_task
@@ -8,6 +9,15 @@ import uuid
 
 app = FastAPI()
 
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.post("/documents/upload")
 async def upload_document(file: UploadFile = File(...)):

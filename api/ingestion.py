@@ -4,6 +4,24 @@ import tempfile
 from supabase_client import supabase
 from ocr_service import get_ocr_reader
 import re
+import json 
+import numpy as np
+
+def clean_for_json(obj):
+    if isinstance(obj, dict):
+        return {k: clean_for_json(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [clean_for_json(v) for v in obj]
+    elif isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    else:
+        return obj
+
+
 
 
 def table_to_markdown(table):
@@ -95,7 +113,6 @@ def ingest_document(document_id: str):
         .eq("id", document_id)
         .execute()
     )
-
     if not doc_response.data:
         raise Exception("Document not found")
 
@@ -138,8 +155,8 @@ def ingest_document(document_id: str):
                 text = clean_text(block[4])
 
                 if text and is_good_block(text):
-                    supabase.table("text_blocks").insert({
-                        "document_id": document_id,
+                    data = {
+                           "document_id": document_id,
                         "page_number": page_number + 1,
                         "text": text,
                         "bbox": {
@@ -149,7 +166,8 @@ def ingest_document(document_id: str):
                             "y1": y1
                         },
                         "source_type": "pdf_text"
-                    }).execute()
+                    }
+                    supabase.table("text_blocks").insert(clean_for_json(data)).execute()
 
         else:
             # -----------------------

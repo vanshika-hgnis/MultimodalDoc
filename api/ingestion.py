@@ -189,7 +189,7 @@ def ingest_document(document_id: str):
                 xs = [p[0] for p in bbox]
                 ys = [p[1] for p in bbox]
 
-                supabase.table("text_blocks").insert({
+                data = {
                     "document_id": document_id,
                     "page_number": page_number + 1,
                     "text": text,
@@ -200,7 +200,8 @@ def ingest_document(document_id: str):
                         "y1": max(ys)
                     },
                     "source_type": "ocr_text"
-                }).execute()
+                }
+                supabase.table("text_blocks").insert(clean_for_json(data)).execute()
 
         # -----------------------
         # TABLE EXTRACTION
@@ -219,14 +220,22 @@ def ingest_document(document_id: str):
                 "x1": page.rect.width,
                 "y1": page.rect.height
             }
-
-            supabase.table("table_blocks").insert({
-                "document_id": document_id,
+            data = {
+                  "document_id": document_id,
                 "page_number": page_number + 1,
                 "table_markdown": markdown,
                 "table_json": cleaned_table,
                 "bbox": bbox_json
-            }).execute()
+            }
+            supabase.table("table_blocks").insert(clean_for_json(data)).execute()
+
+            # supabase.tanble("table_blocks").insert({
+            #     "document_id": document_id,
+            #     "page_number": page_number + 1,
+            #     "table_markdown": markdown,
+            #     "table_json": cleaned_table,
+            #     "bbox": bbox_json
+            # }).execute()
 
     # 5️⃣ Update status
     supabase.table("documents").update({

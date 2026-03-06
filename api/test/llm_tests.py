@@ -1,8 +1,11 @@
-import requests
-r = requests.post(
-    "http://localhost:11434/api/embeddings",
-    json={"model":"nomic-embed-text","prompt":"hello"}
+import os
+import ollama
+
+client = ollama.Client(
+    host="https://ollama.com",
+    headers={'Authorization': 'Bearer ' + os.environ.get('OLLAMA_API_KEY')}
 )
-emb = r.json()["embedding"]
-print("dim =", len(emb))
-PY
+
+# This will list the available models
+response = client.get("/api/tags")
+print(response.json())

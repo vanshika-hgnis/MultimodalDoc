@@ -269,6 +269,9 @@ celery -A celery_app:celery worker --loglevel=info
 sudo service redis-server start
 ollama serve 
 
+## To   run frontend
+cd frontend
+
 
 ✅ Next: Make Sure Redis Is Running
 

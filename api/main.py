@@ -99,3 +99,10 @@ def rag_answer(request: RetrieveRequest):
         request.k
     )
 
+
+
+@app.get("/documents")
+async def get_documents():
+    # Fetch documents from your Supabase database
+    documents = supabase.table("documents").select("*").execute().data
+    return documents

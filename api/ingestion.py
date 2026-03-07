@@ -23,7 +23,6 @@ def clean_for_json(obj):
 
 
 
-
 def table_to_markdown(table):
     rows = []
     for row in table:

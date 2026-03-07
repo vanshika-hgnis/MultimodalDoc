@@ -1,11 +1,19 @@
 import os
-import ollama
+from ollama import Client
 
-client = ollama.Client(
+api_key = os.getenv("OLLAMA_API_KEY")
+
+if api_key is None:
+    raise ValueError("OLLAMA_API_KEY environment variable is not set!")
+
+client = Client(
     host="https://ollama.com",
-    headers={'Authorization': 'Bearer ' + os.environ.get('OLLAMA_API_KEY')}
+    headers={
+        "Authorization": "Bearer " + api_key
+    }
 )
 
-# This will list the available models
-response = client.get("/api/tags")
-print(response.json())
+# Example: Requesting available models (replace with actual API interaction as per your use case)
+models = client.chat("gpt-oss:120b", [{"role": "user", "content": "What models are available?"}])
+
+print(models)

@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+"use client"
+import { useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+// Source and ChatMsg types for message handling
 type Source = {
   block_type: "text" | "table" | "image";
   block_id: string;
@@ -17,30 +19,173 @@ type ChatMsg =
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE!;
 
+// Function to extract citation numbers from the response
+function extractCitationNumbers(text: string): number[] {
+  const matches = text.match(/\[(\d+)\]/g) ?? [];
+  const nums = matches
+    .map((m) => Number(m.replace("[", "").replace("]", "")))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  return Array.from(new Set(nums));
+}
+
+// Helper function for source preview (for tables, images, or text)
+function SourcePreview({ src }: { src: Source }) {
+  const isTable = src.block_type === "table";
+  return (
+    <div className="w-[420px] max-w-[80vw] rounded-xl border border-slate-700 bg-slate-900 p-3 shadow-xl">
+      <div className="text-xs text-slate-300">
+        <span className="font-semibold">Page {src.page_number}</span>{" "}
+        <span className="ml-2 rounded-md bg-slate-800 px-2 py-0.5">
+          {src.block_type}
+        </span>
+      </div>
+
+      <div className="mt-2 max-h-64 overflow-auto rounded-lg bg-slate-950 p-2 text-sm text-slate-100">
+        {isTable ? (
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            {src.content}
+          </ReactMarkdown>
+        ) : (
+          <pre className="whitespace-pre-wrap">{src.content}</pre>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Citation inline helper for marking citations in the response
+function CitationInline({
+  n,
+  source,
+}: {
+  n: number;
+  source?: Source;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <span
+      className="relative inline-block"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <span className="mx-0.5 cursor-help rounded bg-slate-800 px-1.5 py-0.5 text-xs text-slate-200">
+        [{n}]
+      </span>
+
+      {open && source && (
+        <div className="absolute left-0 top-6 z-50">
+          <SourcePreview src={source} />
+        </div>
+      )}
+    </span>
+  );
+}
+
+// Assistant message display including citations
+function AssistantMessage({
+  content,
+  sources,
+}: {
+  content: string;
+  sources: Source[];
+}) {
+  const citedNums = useMemo(() => extractCitationNumbers(content), [content]);
+
+  const sourceMap = useMemo(() => {
+    const map = new Map<number, Source>();
+    sources.forEach((s, idx) => map.set(idx + 1, s));
+    return map;
+  }, [sources]);
+
+  const parts = useMemo(() => {
+    const tokens = content.split(/(\[\d+\])/g);
+    return tokens.map((t, i) => {
+      const m = t.match(/^\[(\d+)\]$/);
+      if (m) {
+        const n = Number(m[1]);
+        return <CitationInline key={i} n={n} source={sourceMap.get(n)} />;
+      }
+      return (
+        <span key={i}>
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{t}</ReactMarkdown>
+        </span>
+      );
+    });
+  }, [content, sourceMap]);
+
+  return (
+    <div className="rounded-2xl bg-slate-900 p-4 text-slate-100">
+      <div className="prose prose-invert max-w-none">{parts}</div>
+
+      {citedNums.length === 0 && sources.length > 0 && (
+        <div className="mt-3 text-xs text-slate-300">
+          No inline citations found. Sources available below.
+        </div>
+      )}
+
+      {sources.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {sources.map((s, idx) => (
+            <div key={s.block_id} className="relative group">
+              <div className="rounded-lg bg-slate-800 px-2 py-1 text-xs text-slate-200">
+                [{idx + 1}] Page {s.page_number} · {s.block_type}
+              </div>
+              <div className="invisible absolute left-0 top-7 z-50 group-hover:visible">
+                <SourcePreview src={s} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Main page component
 export default function Page() {
-  const [documentId, setDocumentId] = useState<string>("");  // Track selected document ID
+  const [documentId, setDocumentId] = useState<string>("");
   const [busy, setBusy] = useState(false);
   const [uploadName, setUploadName] = useState<string>("");
 
-  const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
+  const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(
+    null
+  );
   const [documents, setDocuments] = useState<any[]>([]);
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
 
+  // Fetch the list of uploaded documents on mount
   useEffect(() => {
     async function fetchDocuments() {
       const response = await fetch(`${API_BASE}/documents`);
       const data = await response.json();
       setDocuments(data);
       if (data.length > 0) {
-        setSelectedDocumentId(data[0].id);  // Default to the first document
-        setUploadName(data[0].filename);    // Set filename for the first document
+        // Set the selected document ID to the first document if available
+        setSelectedDocumentId(data[0].id);
+        setUploadName(data[0].filename);
       }
     }
+
     fetchDocuments();
   }, []);
 
-  // Handle document select change
+  // Update message when selected document changes
+  useEffect(() => {
+    if (selectedDocumentId && uploadName) {
+      setMessages([
+        ...messages,
+        {
+          role: "assistant",
+          content: `Now interacting with document: ${uploadName}`,
+          sources: [],
+        },
+      ]);
+    }
+  }, [selectedDocumentId, uploadName]);
+
+  // Handle document selection
   async function handleDocumentSelect(event: React.ChangeEvent<HTMLSelectElement>) {
     const docId = event.target.value;
     setSelectedDocumentId(docId);
@@ -57,11 +202,11 @@ export default function Page() {
         },
       ]);
     }
-  };
+  }
 
-  // Handle user message and call RAG API
+  // Handle user message and call the RAG API
   async function sendMessage() {
-    if (!selectedDocumentId) return; // Ensure document is selected
+    if (!selectedDocumentId) return;
 
     const userText = input.trim();
     setInput("");

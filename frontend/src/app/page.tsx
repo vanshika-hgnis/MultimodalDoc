@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-// Source and ChatMsg types for message handling
 type Source = {
   block_type: "text" | "table" | "image";
   block_id: string;
@@ -19,7 +18,6 @@ type ChatMsg =
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE!;
 
-// Function to extract citation numbers from the response
 function extractCitationNumbers(text: string): number[] {
   const matches = text.match(/\[(\d+)\]/g) ?? [];
   const nums = matches
@@ -28,7 +26,6 @@ function extractCitationNumbers(text: string): number[] {
   return Array.from(new Set(nums));
 }
 
-// Helper function for source preview (for tables, images, or text)
 function SourcePreview({ src }: { src: Source }) {
   const isTable = src.block_type === "table";
   return (
@@ -53,7 +50,6 @@ function SourcePreview({ src }: { src: Source }) {
   );
 }
 
-// Citation inline helper for marking citations in the response
 function CitationInline({
   n,
   source,
@@ -82,7 +78,6 @@ function CitationInline({
   );
 }
 
-// Assistant message display including citations
 function AssistantMessage({
   content,
   sources,
@@ -142,7 +137,6 @@ function AssistantMessage({
   );
 }
 
-// Main page component
 export default function Page() {
   const [documentId, setDocumentId] = useState<string>("");
   const [busy, setBusy] = useState(false);
@@ -155,23 +149,19 @@ export default function Page() {
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
 
-  // Fetch the list of uploaded documents on mount
   useEffect(() => {
     async function fetchDocuments() {
       const response = await fetch(`${API_BASE}/documents`);
       const data = await response.json();
       setDocuments(data);
       if (data.length > 0) {
-        // Set the selected document ID to the first document if available
-        setSelectedDocumentId(data[0].id);
-        setUploadName(data[0].filename);
+        setSelectedDocumentId(data[0].id); // Set to first document
+        setUploadName(data[0].filename); // Set filename here for initial document
       }
     }
-
     fetchDocuments();
   }, []);
 
-  // Update message when selected document changes
   useEffect(() => {
     if (selectedDocumentId && uploadName) {
       setMessages([
@@ -185,8 +175,7 @@ export default function Page() {
     }
   }, [selectedDocumentId, uploadName]);
 
-  // Handle document selection
-  async function handleDocumentSelect(event: React.ChangeEvent<HTMLSelectElement>) {
+  const handleDocumentSelect = async (event: React.ChangeEvent<HTMLSelectElement>) => {
     const docId = event.target.value;
     setSelectedDocumentId(docId);
     if (docId) {
@@ -202,9 +191,8 @@ export default function Page() {
         },
       ]);
     }
-  }
+  };
 
-  // Handle user message and call the RAG API
   async function sendMessage() {
     if (!selectedDocumentId) return;
 
@@ -218,7 +206,7 @@ export default function Page() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          document_id: selectedDocumentId,
+          document_id: selectedDocumentId, // Use selectedDocumentId here
           query: userText,
           k: 8,
         }),
